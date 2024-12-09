@@ -1,125 +1,67 @@
-//
-//  GameScene.swift
-//  TestProject Shared
-//
-//  Created by DeveloperUchida on 2024/12/09.
-//
-
 import SpriteKit
 
 class GameScene: SKScene {
-    
-    
-    fileprivate var label : SKLabelNode?
-    fileprivate var spinnyNode : SKShapeNode?
-
-    
-    class func newGameScene() -> GameScene {
-        // Load 'GameScene.sks' as an SKScene.
-        guard let scene = SKScene(fileNamed: "GameScene") as? GameScene else {
-            print("Failed to load GameScene.sks")
-            abort()
-        }
-        
-        // Set the scale mode to scale to fit the window
-        scene.scaleMode = .aspectFill
-        
-        return scene
-    }
-    
-    func setUpScene() {
-        // Get label node from scene and store it for use later
-        self.label = self.childNode(withName: "//helloLabel") as? SKLabelNode
-        if let label = self.label {
-            label.alpha = 0.0
-            label.run(SKAction.fadeIn(withDuration: 2.0))
-        }
-        
-        // Create shape node to use during mouse interaction
-        let w = (self.size.width + self.size.height) * 0.05
-        self.spinnyNode = SKShapeNode.init(rectOf: CGSize.init(width: w, height: w), cornerRadius: w * 0.3)
-        
-        if let spinnyNode = self.spinnyNode {
-            spinnyNode.lineWidth = 4.0
-            spinnyNode.run(SKAction.repeatForever(SKAction.rotate(byAngle: CGFloat(Double.pi), duration: 1)))
-            spinnyNode.run(SKAction.sequence([SKAction.wait(forDuration: 0.5),
-                                              SKAction.fadeOut(withDuration: 0.5),
-                                              SKAction.removeFromParent()]))
-        }
-    }
+    var player: SKSpriteNode!
+    var bulletSpeed: CGFloat = 600
+    var enemySpawnRate: TimeInterval = 2.0
     
     override func didMove(to view: SKView) {
-        self.setUpScene()
+        setupPlayer()
+        spawnEnemies()
     }
-
-    func makeSpinny(at pos: CGPoint, color: SKColor) {
-        if let spinny = self.spinnyNode?.copy() as! SKShapeNode? {
-            spinny.position = pos
-            spinny.strokeColor = color
-            self.addChild(spinny)
+    
+    func setupPlayer() {
+        player = SKSpriteNode(color: .blue, size: CGSize(width: 50, height: 50))
+        player.position = CGPoint(x: size.width / 2, y: 100)
+        addChild(player)
+    }
+    
+    func fireBullet(at position: CGPoint) {
+        let bullet = SKSpriteNode(color: .yellow, size: CGSize(width: 10, height: 30))
+        bullet.position = player.position
+        addChild(bullet)
+        
+        let moveAction = SKAction.move(to: CGPoint(x: position.x, y: size.height + bullet.size.height), duration: TimeInterval(size.height / bulletSpeed))
+        let removeAction = SKAction.removeFromParent()
+        bullet.run(SKAction.sequence([moveAction, removeAction]))
+    }
+    
+    func spawnEnemies() {
+        let spawn = SKAction.run { [weak self] in
+            self?.createEnemy()
         }
+        let wait = SKAction.wait(forDuration: enemySpawnRate)
+        let sequence = SKAction.sequence([spawn, wait])
+        run(SKAction.repeatForever(sequence))
+    }
+    
+    func createEnemy() {
+        let enemy = SKSpriteNode(color: .red, size: CGSize(width: 40, height: 40))
+        let xPosition = CGFloat.random(in: 0...size.width)
+        enemy.position = CGPoint(x: xPosition, y: size.height)
+        addChild(enemy)
+        
+        let moveAction = SKAction.move(to: CGPoint(x: xPosition, y: -enemy.size.height), duration: 4.0)
+        let removeAction = SKAction.removeFromParent()
+        enemy.run(SKAction.sequence([moveAction, removeAction]))
     }
     
     override func update(_ currentTime: TimeInterval) {
-        // Called before each frame is rendered
+        checkCollisions()
+    }
+    
+    func checkCollisions() {
+        enumerateChildNodes(withName: "*") { node, _ in
+            if let enemy = node as? SKSpriteNode, enemy.color == .red {
+                self.enumerateChildNodes(withName: "*") { bulletNode, _ in
+                    if let bullet = bulletNode as? SKSpriteNode, bullet.color == .yellow {
+                        if enemy.frame.intersects(bullet.frame) {
+                            enemy.removeFromParent()
+                            bullet.removeFromParent()
+                        }
+                    }
+                }
+            }
+        }
     }
 }
-
-#if os(iOS) || os(tvOS)
-// Touch-based event handling
-extension GameScene {
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let label = self.label {
-            label.run(SKAction.init(named: "Pulse")!, withKey: "fadeInOut")
-        }
-        
-        for t in touches {
-            self.makeSpinny(at: t.location(in: self), color: SKColor.green)
-        }
-    }
-    
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches {
-            self.makeSpinny(at: t.location(in: self), color: SKColor.blue)
-        }
-    }
-    
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches {
-            self.makeSpinny(at: t.location(in: self), color: SKColor.red)
-        }
-    }
-    
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches {
-            self.makeSpinny(at: t.location(in: self), color: SKColor.red)
-        }
-    }
-    
-   
-}
-#endif
-
-#if os(OSX)
-// Mouse-based event handling
-extension GameScene {
-
-    override func mouseDown(with event: NSEvent) {
-        if let label = self.label {
-            label.run(SKAction.init(named: "Pulse")!, withKey: "fadeInOut")
-        }
-        self.makeSpinny(at: event.location(in: self), color: SKColor.green)
-    }
-    
-    override func mouseDragged(with event: NSEvent) {
-        self.makeSpinny(at: event.location(in: self), color: SKColor.blue)
-    }
-    
-    override func mouseUp(with event: NSEvent) {
-        self.makeSpinny(at: event.location(in: self), color: SKColor.red)
-    }
-
-}
-#endif
-
